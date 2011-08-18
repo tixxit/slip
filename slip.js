@@ -12,7 +12,7 @@ var slip = window.slip = window.slip || {},
  * typeof, working correctly for instances of Number, String, and Boolean.
  * However, it doesn't detect functions, as there is currently no need in Slip.
  */
-function typeOf(obj, t) {
+slip.typeOf = function(obj, t) {
     if (obj === undefined)
         return "undefined";
 
@@ -32,6 +32,31 @@ function typeOf(obj, t) {
 };
 
 
-slip.typeOf = typeOf;
+/**
+ * Wraps and returns the function fn, by "unpacking" the argIdx-th argument.
+ * This assumes that the argument in the argIdx-th position is an array. It
+ * will then replace that argument with the arrays elements as individual
+ * arguments. So, for example,
+ * 
+ * slip.unpack(function(a,b,c) { return a + b + c }, 1)(1, [ 1, 1 ]) == 3
+ * 
+ * @param fn A function to wrap.
+ * @param argIdx The position of the argument to unpack.
+ * @return The wrapped function.
+ */
+slip.unpack = function(fn, argIdx) {
+	return function() {
+		var origargs = arguments,
+			i = 0, len = origargs.length,
+			args = [];
+		for (argIdx = argIdx || 0; i < len; i++) {
+			if (i == argIdx)
+				args.push.apply(args, origargs[i]);
+			else
+				args.push(origargs[i]);
+		}
+		return fn.apply(this, args);
+	}
+};
 
 })(this);
