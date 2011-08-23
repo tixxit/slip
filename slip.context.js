@@ -156,6 +156,8 @@ Context.prototype.zip = function(other) {
 	}));
 };
 
+Context.prototype._log = function() { this.forEach(function(x) { console.log(x) }) };
+
 
 slip.Context = Context;
 slip.ctx = function(obj) { return new Context(obj) };

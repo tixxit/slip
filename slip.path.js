@@ -252,7 +252,7 @@ function AsyncLabeler() {
 	};
 	
 	this.visitContext = function(n) {
-		n.async = true;
+		return n.async = true;
 	};
 	
 	this.visitMember = function(n) {
@@ -266,9 +266,9 @@ function AsyncLabeler() {
 	
 	this.visitOp = function(n) {
 		var i = 0, len = n.args.length,
-			async = true;
-		for (; i < len && async; i++)
-			async = async && n.args[i].accept(this);
+			async = false;
+		for (; i < len; i++)
+			async = n.args[i].accept(this) || async;
 		return n.async = async;
 	};
 }
@@ -295,7 +295,7 @@ function JsCompiler() {
 		for (p in vars) {
 			if (vars.hasOwnProperty(p)) {
 				if (vars[p].async)
-					async.push(p)
+					async.push(p);
 				else
 					sync.push(p);
 			}
@@ -383,22 +383,108 @@ function Compiler() {
 		
 		return expr;
 	};
+	
+	// Let the compiler be treated as a single phase.
+	this.process = function(input) {
+		return this.compile(input);
+	}
 }
 
 
 slip.path.ConstantFolder = ConstantFolder;
 slip.path.Compiler = Compiler;
 
-var compiler = slip.path.compiler = new Compiler()
+
+// There can be many different named compilers.
+
+var compiler = slip.path.compiler = {};
+
+
+// A compiler that can be used by other compilers to compile a path ast down
+// to Javascript.
+
+compiler["ast"] = new Compiler()
 	.registerPhase("constantFolder", new ConstantFolder())
 	.registerPhase("asyncLabeler", new AsyncLabeler())
 	.registerPhase("jsCompiler", new JsCompiler());
 
-slip.path.compile = function(expr) {
-	return slip.path.compiler.compile(expr);
+
+// A compiler that just wraps literal Javascript.
+
+compiler["js"] = new Compiler()
+	.registerPhase("wrapper", {
+		process: function(js) { return "(function(context) {return (" + js + ")})" }
+	});
+
+
+// Presumptuous?
+
+slip.path.defaultCompiler = "joan";
+
+
+/**
+ * Compiles an expression to Javascript. This can take an optional 'type'
+ * parameter that indicates the language type (eg. "joan"). By default, slip
+ * only comes with 3 languages: js, joan, and ast.
+ * 
+ * js: js just wraps a literal JS expression so it can be used with
+ * 	   other parts of Slip.
+ * 
+ * joan: joan (Javascript Object Access Notation) is a simple JS-like language
+ *       that can be used to access Slip's asynchronous contexts transparently.
+ * 
+ * ast: This is meant to be used by language writers and compiles a path AST
+ * 	    into Javascript with variable/object access delegated to an async
+ * 	    Slip Context.
+ * 
+ * What is returned is largely dependent on the type given. However, most types
+ * should return a string that contains valid Javascript.
+ * 
+ * If type is omitted, then the type is assumed to be the value in
+ * 'slip.path.defaultCompiler'. By default, this is "joan".
+ * 
+ * @param type A string specifying the type ("joan", "js", or "ast").
+ * @param expr An 'expression' that is type-dependent (likely a string).
+ * @return The result of compiling 'expr' using the 'type' compiler.
+ */
+slip.path.compile = function(type, expr) {
+	if (expr === undefined) {
+		expr = type;
+		type = slip.path.defaultCompiler;
+	}
+	
+	var compiler = slip.path.compiler[type];
+	if (!compiler || !compiler.compile) {
+		throw new Error("Cannot find compiler: " + type);
+	}
+	
+	return compiler.compile(expr);
 };
 
-// Idea: Assign each Node instance a unique ID. This can be used to store
-// previously computed values for access if it is used again.
+
+var cache = {};
+
+/**
+ * A convenience method that will compile an expression of type 'type' and
+ * evaluate it using the given context. The only required parameter is 'expr',
+ * all others can be omitted.
+ */
+slip.path.eval = function(type, expr, context) {
+	if (context == undefined && slip.typeOf(expr) != "string") {
+		if (expr) {
+			context = expr;
+			expr = type;
+		} else {
+			expr = type;
+		}
+		type = slip.path.defaultCompiler;
+	}
+	
+	var fn = cache[expr] || eval(slip.path.compile(type, expr));
+	cache[expr] = fn;
+	if (!(context instanceof slip.Context))
+		context = new slip.Context(context);
+	return fn(context);
+}
 
 })(this);
