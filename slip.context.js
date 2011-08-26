@@ -25,7 +25,7 @@ var slip = global.slip = global.slip || {},
  */
 function Context(val, parent) {
     var type = this.type = typeOf(val),
-        def = slip.isDeferred(val) ? val : new slip.Deferred().set(val).promise;
+    	def = slip.asDeferred(val);
 
     this.get = function(p) {
     	if (arguments.length) {
@@ -105,13 +105,9 @@ Context.prototype.map = function(fn, self) {
         var r = fn.apply(self, arguments),
             pos = i++;
 
-        if (slip.isDeferred(r)) {
-            defs.push(r.get(function(x) {
-                result[pos] = x;
-            }));
-        } else {
-            result[pos] = r;
-        }
+        defs.push(slip.asDeferred(r).get(function(x) {
+            result[pos] = x;
+        }));
     });
 
     return new Context(slip.when.apply(slip, defs).then(function() { return result }));

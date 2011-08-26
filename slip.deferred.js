@@ -1,6 +1,6 @@
-(function(window, undefined) {
+(function(global, undefined) {
 
-var slip = window.slip = window.slip || {},
+var slip = global.slip = global.slip || {},
     bind = function(fn, self) {
         return function() { return fn.apply(self, arguments) }
     },
@@ -168,6 +168,42 @@ slip.when = function() {
         def.set(values);
 
     return def.promise;
+};
+
+
+var wrappers = slip.wrapDeferred = [
+	(function(obj) { return slip.isDeferred(obj) && obj })
+];
+
+// Add a wrapper for jQuery deferreds.
+
+if (global.jQuery) {
+	wrappers.push(function(obj) {
+		if (obj.then && obj.pipe) {
+			var f = new Future();
+			obj.then(bind(f.set, f), bind(f.error, f));
+			return f.promise;
+		}
+	});
+}
+
+
+/**
+ * This will map obj to a Deferred. First, if obj is already a Deferred, then
+ * it is returned as-is. Otherwise, if obj is another type of deferred (ie.
+ * from jQuery or Dojo), then it will return a slip.Deferred that is equivalent
+ * to that deferred. Otherwise, obj is assumed to be a constant value and an
+ * already-set Promise is returned whose value is obj.
+ * 
+ * @param A slip.Deferred, jQuery.Deferred, or any other value.
+ * @return a slip.Deferred.
+ */
+slip.asDeferred = function(obj) {
+	for (var i = 0, len = wrappers.length, def; i < len; i++)
+		if (def = wrappers[i](obj))
+			return def;
+	
+	return new Future().set(obj).promise;
 };
 
 })(this);
