@@ -69,7 +69,9 @@ Context.prototype.forEach = function(fn, self) {
 Context.prototype.flatMap = function(fn, self) {
     var defs = [],
         result = [],
-        i = 0;
+        i = 0,
+        def = new slip.Deferred();
+    
     this.forEach(function() {
         var ctx = fn.apply(self, arguments),
             pos = i++;
@@ -79,16 +81,20 @@ Context.prototype.flatMap = function(fn, self) {
         defs.push(ctx.forEach(function(x) {
             result[pos].push(x);
         }));
+        
+        slip.when.apply(slip, defs)
+        	.get(function() {
+		        var x = [],
+		            i = 0,
+		            len = result.length;
+		        for (; i < len; i++)
+		            x.push.apply(x, result[i]);
+		        def.set(x);
+		    })
+		    .error(function() { def.reject(); })
     });
 
-    return new Context(slip.when.apply(slip, defs).then(function() {
-        var x = [],
-            i = 0,
-            len = result.length;
-        for (; i < len; i++)
-            x.push.apply(x, result[i]);
-        return x;
-    }));
+    return new Context(def.promise);
 };
 
 Context.prototype.map = function(fn, self) {
@@ -112,15 +118,7 @@ Context.prototype.map = function(fn, self) {
 };
 
 Context.prototype.filter = function(fn, self) {
-	/*
-	Longer in characters, shorter in time.
-	return this.reduce(function(acc, x, i, ctx) {
-		if (fn.call(self, x, i, ctx))
-			acc.push(x);
-		return acc;
-	}, []);
-	*/
-    return this.flatMap(function(x) {
+	return this.flatMap(function(x) {
         return fn.apply(self, arguments) ? x : undefined;
     });
 };
@@ -139,7 +137,7 @@ Context.prototype.zip = function(other) {
 	
 	for (; i <= len; i++)
 		defs.push(args[i].get().then(function(x) {
-			return slip.typeOf(x) != "array" ? (x ? [ x ] : []) : x; 
+			return slip.typeOf(x) != "array" ? (x !== undefined ? [ x ] : []) : x; 
 		}));
 		
 	return new Context(slip.when.apply(slip, defs).then(function(pile) {

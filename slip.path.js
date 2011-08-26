@@ -79,6 +79,7 @@ function Literal() {
 	return Node("value");
 }
 
+
 slip.path = {};
 var ast = slip.path.ast = {
 	Boolean: Literal(),
@@ -87,7 +88,8 @@ var ast = slip.path.ast = {
 	Context: Node(),
 	Member: Node("object", "member"),
 	If: Node("cond", "then", "otherwise"), // Covers ?:, &&, and ||.
-	Op: Node("name", "arity", "args")
+	Op: Node("name", "arity", "args"),
+	Array: Node("elements")		// Array is optimized away by the ConstantFolder.
 };
 
 for (T in slip.path.ast)
@@ -99,15 +101,19 @@ for (T in slip.path.ast)
  */
 function simpleCompilation(str) {
 	return function() {
-		var parts = str.match(/\$\d+|[^\$\\]+|\\.|./g),
+		var parts = str.match(/\$(\d+|\*)|[^\$\\]+|\\.|./g),
 			i = parts.length, part;
 		while (i--) {
 			part = parts[i];
 			if (part[1]) {
-				if (part[0] == "\\")
+				if (part[0] == "\\") {
 					parts[i] = part[1];
-				else if (part[0] == "$")
-					parts[i] = arguments[+part.substring(1)];
+				} else if (part[0] == "$") {
+					if (part[1] == "*")
+						parts[i] = Array.prototype.join.call(arguments, ",");
+					else
+						parts[i] = arguments[+part.substring(1)];
+				}
 			}
 		}
 		return parts.join("");
@@ -152,6 +158,7 @@ def(">", function(a, b) { return a > b }, "$0 > $1");
 def(">>", function(a, b) { return a >> b }, "$0 >> $1");
 def("<<", function(a, b) { return a << b }, "$0 << $1");
 def(">>>", function(a, b) { return a >>> b }, "$0 >>> $1");
+def("[]", function() { return Array.prototype.slice.call(arguments) }, "[$*]");
 
 function CompilationContext(parent) {
 	var symbols = {};
@@ -178,6 +185,8 @@ for (T in slip.path.ast)
  * literal. For example, "1 + 2" will be replaced with "3", "true ? b : c"
  * with "b" and so on. It currently only handles constant expressions that
  * evaluate to a boolean, number or string.
+ * 
+ * This also turns ast.Array literals into an "[]" ast.Op.
  */
 function ConstantFolder() {
 	this.process = function(ast) {
@@ -235,6 +244,10 @@ function ConstantFolder() {
 				result = n;
 			return result;
 		}
+	};
+	
+	this.visitArray = function(n) {
+		return ast.Op("[]", n.elements.length, n.elements);
 	};
 };
 ConstantFolder.prototype = new Visitor();
