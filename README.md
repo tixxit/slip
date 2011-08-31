@@ -88,9 +88,9 @@ or not.
 
 You can also use jQuery Deferreds instead... or mix and match.
 
-var a = slip.deferred(),
-	b = $.get("/b.json");
-slip.path.eval("a + b", { a: a, b: b })._log();
+	var a = slip.deferred(),
+		b = $.get("/b.json");
+	slip.path.eval("a + b", { a: a, b: b })._log();
 
 
 Context Transforms
@@ -116,13 +116,13 @@ For instance, say you have file `test-a.json` with the following contents:
 
 Then you could do something like,
 
-	var ctx = { head: { href: "test-a.json" }, tail: ".." };
-	slip.path.eval("head + tail", ctx)._log();
+	var ctx = { head: { href: "test-a.json" }, tail: { message: ".." } };
+	slip.path.eval("head.message + tail.message", ctx)._log();
 	// Prints "Hi, from A..."
 
 Transforms work with arrays too.
 
-	var ctx = [ { href: "test-a.json", href: "test-a.json" } ];
+	var ctx = [ { href: "test-a.json" }, { href: "test-a.json" } ];
 	slip.path.eval("message", ctx)._log();
 	// Prints "Hi, from A." twice.
 
