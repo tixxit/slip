@@ -2,7 +2,9 @@
 
 var slip = global.slip = global.slip || {},
     Deferred = slip.Deferred,
-    typeOf = slip.typeOf;
+    typeOf = slip.typeOf,
+    transforms = {},
+    transformOrder = [];
 
 
 /**
@@ -25,16 +27,34 @@ var slip = global.slip = global.slip || {},
  */
 function Context(val, parent) {
     var type = this.type = typeOf(val),
-    	def = slip.asDeferred(val);
-
+    	def = slip.deferred(val),
+    	i = 0, len = transformOrder.length;
+    
     this.get = function(p) {
     	if (arguments.length) {
     		return this.flatMap(function(obj) { return obj[p] });
-    		// return new Context(this.get().then(function(obj) { return obj[p] }), this);
     	} else {
     		return def.promise;
     	}
     };
+    
+    this.parent = parent = parent || slip.context.empty;
+    
+    for (; i < len; i++) (function(t) {
+    	def = def.then(function(obj) {
+    		var result;
+    		
+    		if (slip.typeOf(obj) == "array") {
+    			result = []; 
+    			for (var j = 0, len = obj.length; j < len; j++)
+    				result[j] = slip.deferred(transforms[t].call(parent, obj[j]));
+    			result = slip.when(result);
+    		} else {
+    			result = transforms[t].call(parent, obj);
+    		}
+    		return result;
+    	});
+    })(transformOrder[i]);
 }
 
 /**
@@ -75,14 +95,14 @@ Context.prototype.flatMap = function(fn, self) {
     this.forEach(function() {
         var ctx = fn.apply(self, arguments),
             pos = i++;
-        ctx = ctx instanceof Context ? ctx : new Context(ctx);
+        ctx = ctx instanceof Context ? ctx : new Context(ctx, this);
         result[pos] = [];
 
         defs.push(ctx.forEach(function(x) {
             result[pos].push(x);
         }));
-        
-        slip.when.apply(slip, defs)
+    }, this).get(function() {
+    	slip.when(defs)
         	.get(function() {
 		        var x = [],
 		            i = 0,
@@ -94,7 +114,7 @@ Context.prototype.flatMap = function(fn, self) {
 		    .error(function() { def.reject(); })
     });
 
-    return new Context(def.promise);
+    return new Context(def.promise, this);
 };
 
 Context.prototype.map = function(fn, self) {
@@ -105,12 +125,12 @@ Context.prototype.map = function(fn, self) {
         var r = fn.apply(self, arguments),
             pos = i++;
 
-        defs.push(slip.asDeferred(r).get(function(x) {
+        defs.push(slip.deferred(r).get(function(x) {
             result[pos] = x;
         }));
     });
 
-    return new Context(slip.when.apply(slip, defs).then(function() { return result }));
+    return new Context(slip.when.apply(slip, defs).then(function() { return result }), this);
 };
 
 Context.prototype.filter = function(fn, self) {
@@ -122,7 +142,7 @@ Context.prototype.filter = function(fn, self) {
 Context.prototype.reduce = function(fn, acc, self) {
 	return new Context(this.forEach(function(x, i, ctx) {
 		acc = fn.call(self, acc, x, i, ctx);
-	}).then(function() { return acc }).promise);
+	}).then(function() { return acc }).promise, this);
 };
 
 Context.prototype.zip = function(other) {
@@ -154,6 +174,14 @@ Context.prototype._log = function() { this.forEach(function(x) { console.log(x) 
 
 
 slip.Context = Context;
-slip.ctx = function(obj) { return new Context(obj) };
+slip.context = function(obj) { return obj instanceof Context ? obj : new Context(obj) };
+
+slip.context.empty = new Context();
+slip.context.empty.parent = slip.context.empty;
+
+slip.context.transform = function(name, t) {
+	transforms[name] = t;
+	transformOrder.push(name);
+};
 
 })(this);

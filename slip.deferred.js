@@ -122,14 +122,23 @@ function Future() {
 
 Future.prototype = new Promise();
 
-Future.prototype.then = function(s, f, self) {
-    var f = new Future();
-    this.get(function(val) {
-            f.set(s ? s.call(this, val) : val);
-        }, self)
-        .error(function(msg) {
-            f.reject(f ? f.call(this, msg) : msg);
-        }, self);
+Future.prototype.then = function(success, fail, self) {
+    var f = new Future(),
+    	chain = function(def) {
+    		def.get(function(val) {
+	    		if (val instanceof Promise) {
+	    			chain(val);
+	    		} else {
+	            	f.set(success ? success.call(self, val) : val);
+	            }
+	        })
+	        .error(function(msg) {
+	            f.reject(fail ? fail.call(self, msg) : msg);
+	        });
+    	};
+   	
+   	chain(this);
+   	
     return f.promise;
 };
 Future.prototype.always = function(fn) { return this.get(fn).error(fn) };
@@ -137,8 +146,8 @@ Future.prototype.always = function(fn) { return this.get(fn).error(fn) };
 
 slip.Deferred = Future;
 slip.isDeferred = function(d) { return d instanceof Promise };
-slip.when = function() {
-    var args = arguments,
+slip.when = function(defs) {
+    var args = slip.typeOf(defs) == "array" ? defs : arguments,
         i = 0,
         len = args.length,
         errors = [],
@@ -171,21 +180,9 @@ slip.when = function() {
 };
 
 
-var wrappers = slip.wrapDeferred = [
+var wrappers = [
 	(function(obj) { return slip.isDeferred(obj) && obj })
 ];
-
-// Add a wrapper for jQuery deferreds.
-
-if (global.jQuery) {
-	wrappers.push(function(obj) {
-		if (obj.then && obj.pipe) {
-			var f = new Future();
-			obj.then(bind(f.set, f), bind(f.error, f));
-			return f.promise;
-		}
-	});
-}
 
 
 /**
@@ -198,12 +195,17 @@ if (global.jQuery) {
  * @param A slip.Deferred, jQuery.Deferred, or any other value.
  * @return a slip.Deferred.
  */
-slip.asDeferred = function(obj) {
+slip.deferred = function(obj) {
+	if (!arguments.length)
+		return new Future();
+	
 	for (var i = 0, len = wrappers.length, def; i < len; i++)
 		if (def = wrappers[i](obj))
 			return def;
 	
 	return new Future().set(obj).promise;
 };
+
+slip.deferred.wrappers = wrappers;
 
 })(this);

@@ -30,13 +30,13 @@ series of transformations (Context is a monad).
 
 Note that ctxt hasn't changed; each context is immutable!
 
-	ctxt.zip(new slip.Context([ 5, 4, 3, 2, 1 ]))
+	ctxt.zip(slip.context([ 5, 4, 3, 2, 1 ]))	// Lose the new.
 	    .flatMap(slip.unpack(function(a, b) {
 	    
 	    	// slip.unpack simply "expands" the first array argument.
 	    	// So, slip.unpack(fn)([ 1, 2, 3 ], 4) == fn(1, 2, 3, 4)
 	    
-	        return new slip.Context(a + b);
+	        return slip.context(a + b);
 	    }))._log();
 	// Prints: 6 (5 times)
 
@@ -56,7 +56,7 @@ non-strict operands, JS' ternary operator (a ? b : c), etc.
 Since slip.path.eval/compile uses "joan" by default, you don't need
 to pass it as a type parameter to slip.path.eval/compile.
 
-	slip.path.eval("a.b + c", new slip.Context({ a: { b: 1 }, c: 2 }))._log();
+	slip.path.eval("a.b + c", slip.context({ a: { b: 1 }, c: 2 }))._log();
 
 To make things easier for simple cases, you can pass JS objects
 directly, instead of a Context, and it will be wrapped for you. It is
@@ -75,7 +75,7 @@ could've just done something like a.b + c directly. The magic of
 Context is when you start using deferreds (asynchronous access).
 
 	var a = new slip.Deferred(),
-	    b = new slip.Deferred();
+	    b = new slip.Deferred();	// Can also use slip.deferred()
 	slip.path.eval("a * b", { a: a.promise, b: b.promise })._log();
 	a.set(3);
 	b.set(4);
@@ -85,6 +85,50 @@ The value in the deferred could come from the completion of a
 WebWorker, or the return of an AJAX request. Slip doesn't care, as
 it provides a uniform interface to data, regardless if it is async
 or not.
+
+You can also use jQuery Deferreds instead... or mix and match.
+
+var a = slip.deferred(),
+	b = $.get("/b.json");
+slip.path.eval("a + b", { a: a, b: b })._log();
+
+
+Context Transforms
+------------------
+
+Slip provides a way of intercepting and replacing the objects wrapped
+by a Context dynamically. It does this using "transforms". Transforms
+are pretty straightforward. You give a name and a function that takes
+an object and returns another to slip.context.transform(name, fn).
+
+	var alias = { "Tom": "Thomas" };
+	slip.context.transform("alias", function(obj) {
+		return obj in alias ? alias[obj] : obj;
+	});
+	slip.path.eval("name", { name: "Tom" })._log();
+	// Prints "Thomas"
+
+Slip provides 1 transform by default, if you are using jQuery. It will
+replace objects of the form { href: "..." } with the object at that URI.
+For instance, say you have file `test-a.json` with the following contents:
+
+	{ "message": "Hi, from A." }
+
+Then you could do something like,
+
+	var ctx = { head: { href: "test-a.json" }, tail: ".." };
+	slip.path.eval("head + tail", ctx)._log();
+	// Prints "Hi, from A..."
+
+Transforms work with arrays too.
+
+	var ctx = [ { href: "test-a.json", href: "test-a.json" } ];
+	slip.path.eval("message", ctx)._log();
+	// Prints "Hi, from A." twice.
+
+
+Compile to Javascript
+---------------------
 
 slip.path also let's you compile expressions down to static JS. The
 compiled source is a function that takes a single argument (a
