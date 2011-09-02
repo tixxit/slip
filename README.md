@@ -132,7 +132,7 @@ Compile to Javascript
 
 slip.path also let's you compile expressions down to static JS. The
 compiled source is a function that takes a single argument (a
-Context) and returns a Context, unless it only uses literals.
+Context) and returns a Context.
 
 	var source = slip.path.compile("[ a, b, 3 ]"),
 	    expr = eval(source);

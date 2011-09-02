@@ -296,7 +296,7 @@ function JsCompiler() {
 	
 	this.process = function(ast) {
 		ast.accept(this);
-		return "(function(context){return (" + pop() + ")})";
+		return "(function(context){return slip.context(" + pop() + ")})";
 	};
 	
 	this.visitBoolean = this.visitNumber = function(n) { push(str(n.value)) };
@@ -456,6 +456,12 @@ slip.path.eval = function(type, expr, context) {
 	if (!(context instanceof slip.Context))
 		context = new slip.Context(context);
 	return fn(context);
-}
+};
+
+slip.Context.prototype.eval = function() {
+	var args = Array.prototype.slice.call(arguments);
+	args.push(this);
+	return slip.path.eval.apply(slip.path, args);
+};
 
 })(this);
