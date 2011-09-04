@@ -47,13 +47,6 @@ var slip = global.slip = global.slip || {},
     			].join("|"), "g"),
     //tokenizer = /(\w+|[-+*\/%<>()!\.:\[\]]|[=!<>]=|\/\/|("([^"\\]*(\\.)?)+")|('([^'\\]*(\\.)?)+')|&&|\|\||\s+|.)/g,
     
-    // Converts strings of length 3 or less to tokens.
-    strToToken = function(s) {
-        var i = s.length, tok = 0;
-        while (i--)
-            tok |= s.charCodeAt(i) << (i * 8);
-        return tok;
-    },
     tokid = function() { return EOS++ },
     
     EOS = 0x1000000,
@@ -62,15 +55,28 @@ var slip = global.slip = global.slip || {},
     STRING = tokid(),
     TRUE  = tokid(),
     FALSE = tokid(),
+    THIS = tokid(),
     
     keywords = {
+    	"this": THIS,
         "true": TRUE,
-        "false": FALSE,
-        or: strToToken("||"),
-        and: strToToken("&&"),
-        not: strToToken("!")
+        "false": FALSE
+    },
+    
+    // Converts strings of length 3 or less to tokens.
+    strToToken = function(s) {
+    	if (keywords[s])
+    		return keywords[s];
+    	
+        var i = s.length, tok = 0;
+        while (i--)
+            tok |= s.charCodeAt(i) << (i * 8);
+        return tok;
     };
 
+keywords.or = strToToken("||");
+keywords.and = strToToken("&&");
+keywords.not = strToToken("!");
 
 /*
  * Lexer
@@ -101,7 +107,7 @@ function lex(input) {
             } else if (t.length <= 3 && simple.test(t)) {
                 l(strToToken(t), t);
 
-            } else if (kw.test(t)) {
+            } else if (keywords[t]) { // kw.test(t)) {
                 l(keywords[t], t);
 
             } else if (whitespace.test(t)) {
@@ -273,6 +279,9 @@ function Parser() {
         })
         .on(FALSE, function(tok) {
         	push(ast.Boolean(false));
+        })
+        .on("this", function(tok) {
+        	push(ast.Context());
         })
         .on("[", listExpr("]", function(length) {
         	push(length ? ast.Array(pop(length)) : ast.Array([]));
