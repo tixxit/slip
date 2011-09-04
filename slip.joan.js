@@ -53,14 +53,11 @@ var slip = global.slip = global.slip || {},
     IDENTIFIER = tokid(),
     NUMBER = tokid(),
     STRING = tokid(),
-    TRUE  = tokid(),
-    FALSE = tokid(),
-    THIS = tokid(),
     
     keywords = {
-    	"this": THIS,
-        "true": TRUE,
-        "false": FALSE
+    	"this": tokid(),
+        "true": tokid(),
+        "false": tokid()
     },
     
     // Converts strings of length 3 or less to tokens.
@@ -274,10 +271,10 @@ function Parser() {
         .on(STRING, function(tok) {
         	push(ast.String(tok.val));
         })
-        .on(TRUE, function(tok) {
+        .on("true", function(tok) {
         	push(ast.Boolean(true));
         })
-        .on(FALSE, function(tok) {
+        .on("false", function(tok) {
         	push(ast.Boolean(false));
         })
         .on("this", function(tok) {
